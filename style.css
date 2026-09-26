@@ -126,6 +126,26 @@
     color: #bdc3c7;
 }
 
+.st-lang-result-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.st-lang-result-tag {
+    font-size: 0.78em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--SmartThemeQuoteColor, #79b8ff);
+    background: rgba(121, 184, 255, 0.12);
+    padding: 1px 6px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .st-lang-grammar-note {
     font-size: 0.82em;
     color: #8be9fd;
@@ -134,6 +154,44 @@
     padding: 4px 8px;
     border-radius: 4px;
     border: 1px dashed rgba(139, 233, 253, 0.3);
+}
+
+.st-lang-correction-note {
+    font-size: 0.85em;
+    color: #f1fa8c;
+    background: rgba(241, 250, 140, 0.08);
+    border: 1px solid rgba(241, 250, 140, 0.25);
+    border-left: 3px solid #f1fa8c;
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin-top: 4px;
+    line-height: 1.35;
+}
+
+.st-lang-alternatives-note {
+    font-size: 0.85em;
+    color: #ff79c6;
+    background: rgba(255, 121, 198, 0.08);
+    border: 1px solid rgba(255, 121, 198, 0.25);
+    border-left: 3px solid #ff79c6;
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin-top: 4px;
+    line-height: 1.35;
+}
+
+.st-lang-note-title {
+    font-weight: bold;
+    font-size: 0.9em;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.st-lang-note-body {
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .st-lang-result-actions {

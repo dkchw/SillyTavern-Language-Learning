@@ -1,22 +1,39 @@
 const MODULE_NAME = 'language_learning_tutor';
 const EXTENSION_DIR = 'third-party/SillyTavern-Language-Learning';
 
-const defaultFormulatePrompt = `You are a conversational language tutor helping a learner speak {{targetLanguage}}.
-The user is having a conversation with "{{char}}".
-User's native language: {{nativeLanguage}}.
-Target language: {{targetLanguage}}.
-Proficiency level: {{level}}.
-Formality / Tone: {{formality}}.
+const defaultFormulatePrompt = `You are an expert language tutor, native speaker, and conversational coach helping a learner interact with "{{char}}" in {{targetLanguage}}.
+The user's native language is {{nativeLanguage}}.
+The target language is {{targetLanguage}}.
+Learner proficiency level: {{level}}.
+Formality / Tone style: {{formality}}.
 {{guidance}}
 
-The user will describe what they want to say. Formulate authentic, natural spoken dialogue in {{targetLanguage}} suitable for this context.
+TASK & GOAL:
+The user has provided an input sentence or thought to say to "{{char}}". The input may be:
+1. A draft attempt written directly in {{targetLanguage}} (which may contain grammatical mistakes, wrong particles/conjugations, or unnatural/stiff phrasing), OR
+2. What they want to express in their native language ({{nativeLanguage}}), OR
+3. A mixture of both.
 
-Return ONLY a JSON object with this exact structure:
+YOUR INSTRUCTIONS:
+1. CORRECTION & NATURALIZATION:
+   - If the user wrote in {{targetLanguage}} or made a draft attempt: Analyze it thoroughly. Correct any grammatical errors, unnatural syntax, awkward word pairings, and incorrect politeness levels. Naturalize it into smooth, authentic, idiomatic spoken dialogue that fits the current context and relationship with "{{char}}".
+   - If the user wrote in {{nativeLanguage}}: Translate and naturalize it into authentic, idiomatic spoken dialogue in {{targetLanguage}} tailored for conversation with "{{char}}".
+2. CORRECTION EXPLANATION & FEEDBACK (in {{nativeLanguage}}):
+   - Explicitly highlight what was corrected, changed, or improved, and explain WHY (e.g. "Correction: You used [X], but native speakers say [Y] because...", or "Your sentence was grammatically sound, but [Y] sounds much more natural in casual conversation").
+   - If the input was in {{nativeLanguage}}, explain the nuance of why this natural expression was chosen over a literal textbook translation.
+3. PHONETICS / READING:
+   - Provide clear phonetic reading / romanization (e.g., Romaji with macrons/furigana for Japanese, Pinyin with tone marks for Chinese, or standard transliteration/IPA).
+4. ALTERNATIVES:
+   - Provide 1 or 2 alternative natural ways to say the same thing (e.g., more casual, more formal, or a slightly different emotional shade).
+
+Return ONLY a valid JSON object with this exact structure:
 {
-  "expression": "Natural spoken expression in {{targetLanguage}}",
-  "reading": "Phonetic romanization or pronunciation reading (e.g. Romaji/Pinyin/IPA)",
-  "translation": "Literal or direct meaning in {{nativeLanguage}}",
-  "grammarNote": "Brief 1-sentence tip on key vocabulary, particles, or nuance"
+  "expression": "The polished, naturalized, and corrected expression in {{targetLanguage}}",
+  "reading": "Phonetic reading / romanization (Romaji/Pinyin/IPA)",
+  "translation": "Natural meaning in {{nativeLanguage}}",
+  "correction": "Clear correction breakdown in {{nativeLanguage}} explaining mistakes found, why changes were made, and how it was naturalized",
+  "grammarNote": "Key grammar point, particle rule, or vocabulary nuance (1-2 sentences)",
+  "alternatives": "1-2 alternative natural variations (e.g. casual vs formal)"
 }`;
 
 const defaultMcqPrompt = `[Language Learning Task]
@@ -52,7 +69,9 @@ Return ONLY a JSON object:
   "reading": "Phonetic reading / romanization",
   "translation": "Translation in {{nativeLanguage}}",
   "grammarNote": "Brief nuance explanation"
-}`;
+}
+
+`;
 
 const defaultSettings = Object.freeze({
     targetLanguage: 'Japanese',
@@ -66,7 +85,9 @@ const defaultSettings = Object.freeze({
     mcqPromptTemplate: defaultMcqPrompt,
     impersonatePromptTemplate: defaultImpersonatePrompt,
     showReading: true,
+    showCorrection: true,
     showGrammar: true,
+    showAlternatives: true,
     showAudio: true,
     isMinimized: false,
 });
@@ -80,6 +101,12 @@ function getSettings() {
         if (!Object.hasOwn(extensionSettings[MODULE_NAME], key)) {
             extensionSettings[MODULE_NAME][key] = defaultSettings[key];
         }
+    }
+    // Auto-migrate legacy default prompt that didn't include correction
+    if (extensionSettings[MODULE_NAME].formulatePromptTemplate &&
+        !extensionSettings[MODULE_NAME].formulatePromptTemplate.includes('CORRECTION') &&
+        extensionSettings[MODULE_NAME].formulatePromptTemplate.includes('The user will describe what they want to say.')) {
+        extensionSettings[MODULE_NAME].formulatePromptTemplate = defaultFormulatePrompt;
     }
     return extensionSettings[MODULE_NAME];
 }
@@ -137,9 +164,9 @@ function playSpeech(text, lang) {
     }
 }
 
-// 1. Formulate user's intended thought into target language
-async function formulateExpression(userIntent) {
-    if (!userIntent || !userIntent.trim()) return null;
+// 1. Formulate user's intended thought OR correct & naturalize draft sentence
+async function formulateExpression(userInput) {
+    if (!userInput || !userInput.trim()) return null;
 
     const { generateRaw, characters, characterId, name1, name2 } = SillyTavern.getContext();
     const settings = getSettings();
@@ -162,7 +189,7 @@ async function formulateExpression(userIntent) {
         guidance: guidanceText,
     });
 
-    const prompt = `What I want to say to ${charName}: "${userIntent.trim()}"`;
+    const prompt = `Input sentence/thought to say to ${charName}: "${userInput.trim()}"`;
 
     try {
         const rawJson = await generateRaw({
@@ -178,8 +205,10 @@ async function formulateExpression(userIntent) {
         return {
             expression: rawJson.trim(),
             reading: '',
-            translation: userIntent,
+            translation: userInput,
+            correction: '',
             grammarNote: '',
+            alternatives: '',
         };
     } catch (error) {
         console.error('[Language Learning] Formulation error:', error);
@@ -297,10 +326,27 @@ function displayStudyResult(data) {
         $('#st_lang_trans_expr').hide();
     }
 
+    // Correction & Naturalization breakdown
+    if (settings.showCorrection && data.correction) {
+        $('#st_lang_correction_text').text(data.correction);
+        $('#st_lang_correction_box').show();
+    } else {
+        $('#st_lang_correction_box').hide();
+    }
+
+    // Grammar & nuance note
     if (settings.showGrammar && data.grammarNote) {
         $('#st_lang_grammar_expr').text(`Tip: ${data.grammarNote}`).show();
     } else {
         $('#st_lang_grammar_expr').hide();
+    }
+
+    // Alternative variations
+    if (settings.showAlternatives && data.alternatives) {
+        $('#st_lang_alternatives_text').text(data.alternatives);
+        $('#st_lang_alternatives_box').show();
+    } else {
+        $('#st_lang_alternatives_box').hide();
     }
 
     if (settings.showAudio && data.expression) {
@@ -430,6 +476,25 @@ async function openQuickConfigModal() {
             <textarea id="modal_lang_impersonate_prompt" class="text_pole" rows="4">${settings.impersonatePromptTemplate || defaultImpersonatePrompt}</textarea>
         </div>
 
+        <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
+            <label class="checkbox_label">
+                <input id="modal_lang_show_correction" type="checkbox" ${settings.showCorrection ? 'checked' : ''} />
+                <span>Show grammar correction & naturalization feedback</span>
+            </label>
+            <label class="checkbox_label">
+                <input id="modal_lang_show_alternatives" type="checkbox" ${settings.showAlternatives ? 'checked' : ''} />
+                <span>Show alternative natural variations</span>
+            </label>
+            <label class="checkbox_label">
+                <input id="modal_lang_show_grammar" type="checkbox" ${settings.showGrammar ? 'checked' : ''} />
+                <span>Show grammar notes and nuance tips</span>
+            </label>
+            <label class="checkbox_label">
+                <input id="modal_lang_show_reading" type="checkbox" ${settings.showReading ? 'checked' : ''} />
+                <span>Show pronunciation readings (Romaji/Pinyin/IPA)</span>
+            </label>
+        </div>
+
         <div>
             <button id="modal_reset_prompts" class="menu_button" style="width: auto;">
                 <i class="fa-solid fa-rotate-left"></i> Reset Prompts to Default
@@ -476,6 +541,10 @@ async function openQuickConfigModal() {
         settings.formulatePromptTemplate = popup.dlg.querySelector('#modal_lang_formulate_prompt')?.value || defaultFormulatePrompt;
         settings.mcqPromptTemplate = popup.dlg.querySelector('#modal_lang_mcq_prompt')?.value || defaultMcqPrompt;
         settings.impersonatePromptTemplate = popup.dlg.querySelector('#modal_lang_impersonate_prompt')?.value || defaultImpersonatePrompt;
+        settings.showCorrection = !!popup.dlg.querySelector('#modal_lang_show_correction')?.checked;
+        settings.showAlternatives = !!popup.dlg.querySelector('#modal_lang_show_alternatives')?.checked;
+        settings.showGrammar = !!popup.dlg.querySelector('#modal_lang_show_grammar')?.checked;
+        settings.showReading = !!popup.dlg.querySelector('#modal_lang_show_reading')?.checked;
 
         saveSettingsDebounced();
         updateLanguageBarLabel();
@@ -527,17 +596,34 @@ function injectLanguageBar() {
 
         <div class="st-lang-body">
             <div class="st-lang-input-row">
-                <input id="st_lang_intent_input" type="text" class="st-lang-intent-input" placeholder="Type what you want to say in your native language..." />
-                <button id="st_lang_translate_btn" class="st-lang-action-btn" title="Formulate expression">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Translate</span>
+                <input id="st_lang_intent_input" type="text" class="st-lang-intent-input" placeholder="Type in native language OR draft in target language to correct & naturalize..." />
+                <button id="st_lang_translate_btn" class="st-lang-action-btn" title="Translate thought or correct & naturalize draft sentence">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Translate & Correct</span>
+                </button>
+                <button id="st_lang_check_chat_btn" class="st-lang-action-btn" title="Check & naturalize draft sentence in chatbox">
+                    <i class="fa-solid fa-spell-check"></i> <span>Check Chatbox</span>
                 </button>
             </div>
 
             <div id="st_lang_study_box" class="st-lang-result-box" style="display: none;">
+                <div class="st-lang-result-header">
+                    <span class="st-lang-result-tag"><i class="fa-solid fa-sparkles"></i> Corrected & Natural Expression</span>
+                </div>
                 <div id="st_lang_target_expr" class="st-lang-target-expression"></div>
                 <div id="st_lang_reading_expr" class="st-lang-reading"></div>
                 <div id="st_lang_trans_expr" class="st-lang-translation"></div>
-                <div id="st_lang_grammar_expr" class="st-lang-grammar-note"></div>
+
+                <div id="st_lang_correction_box" class="st-lang-correction-note" style="display: none;">
+                    <div class="st-lang-note-title"><i class="fa-solid fa-spell-check"></i> Correction & Naturalization:</div>
+                    <div id="st_lang_correction_text" class="st-lang-note-body"></div>
+                </div>
+
+                <div id="st_lang_grammar_expr" class="st-lang-grammar-note" style="display: none;"></div>
+
+                <div id="st_lang_alternatives_box" class="st-lang-alternatives-note" style="display: none;">
+                    <div class="st-lang-note-title"><i class="fa-solid fa-shuffle"></i> Alternative Variations:</div>
+                    <div id="st_lang_alternatives_text" class="st-lang-note-body"></div>
+                </div>
                 
                 <div class="st-lang-result-actions">
                     <button id="st_lang_play_audio" class="st-lang-action-btn" title="Listen to pronunciation">
@@ -583,8 +669,19 @@ function injectLanguageBar() {
     });
 
     const handleFormulate = async () => {
-        const text = intentInput.val();
-        if (!text || !text.trim()) return;
+        let text = intentInput.val()?.trim();
+        if (!text) {
+            const chatVal = $('#send_textarea').val()?.trim();
+            if (chatVal) {
+                text = chatVal;
+                intentInput.val(chatVal);
+            }
+        }
+        if (!text) {
+            toastr.info('Type what you want to say in your native language or draft in your target language.');
+            intentInput.focus();
+            return;
+        }
 
         const btn = $('#st_lang_translate_btn');
         btn.prop('disabled', true).find('i').attr('class', 'fa-solid fa-spinner fa-spin');
@@ -601,6 +698,16 @@ function injectLanguageBar() {
     };
 
     $('#st_lang_translate_btn').on('click', handleFormulate);
+    $('#st_lang_check_chat_btn').on('click', () => {
+        const chatVal = $('#send_textarea').val()?.trim();
+        if (!chatVal) {
+            toastr.info('Type a draft sentence into the chatbox first, then click Check Chatbox.');
+            $('#send_textarea').focus();
+            return;
+        }
+        intentInput.val(chatVal);
+        handleFormulate();
+    });
     intentInput.on('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -750,8 +857,18 @@ function injectLanguageBar() {
             saveSettingsDebounced();
         });
 
+        $('#st_lang_show_correction').prop('checked', settings.showCorrection).on('change', function () {
+            settings.showCorrection = $(this).is(':checked');
+            saveSettingsDebounced();
+        });
+
         $('#st_lang_show_grammar').prop('checked', settings.showGrammar).on('change', function () {
             settings.showGrammar = $(this).is(':checked');
+            saveSettingsDebounced();
+        });
+
+        $('#st_lang_show_alternatives').prop('checked', settings.showAlternatives).on('change', function () {
+            settings.showAlternatives = $(this).is(':checked');
             saveSettingsDebounced();
         });
 
