@@ -1,11 +1,70 @@
 const MODULE_NAME = 'language_learning_tutor';
 const EXTENSION_DIR = 'third-party/SillyTavern-Language-Learning';
 
+const defaultFormulatePrompt = `You are a conversational language tutor helping a learner speak {{targetLanguage}}.
+The user is having a conversation with "{{char}}".
+User's native language: {{nativeLanguage}}.
+Target language: {{targetLanguage}}.
+Proficiency level: {{level}}.
+Formality / Tone: {{formality}}.
+{{guidance}}
+
+The user will describe what they want to say. Formulate authentic, natural spoken dialogue in {{targetLanguage}} suitable for this context.
+
+Return ONLY a JSON object with this exact structure:
+{
+  "expression": "Natural spoken expression in {{targetLanguage}}",
+  "reading": "Phonetic romanization or pronunciation reading (e.g. Romaji/Pinyin/IPA)",
+  "translation": "Literal or direct meaning in {{nativeLanguage}}",
+  "grammarNote": "Brief 1-sentence tip on key vocabulary, particles, or nuance"
+}`;
+
+const defaultMcqPrompt = `[Language Learning Task]
+Analyze the ongoing conversation above between {{char}} and {{user}}.
+Create 3 or 4 distinct, engaging response options that {{user}} could say next to {{char}} in {{targetLanguage}}.
+Each choice must represent a different tone or reaction (e.g. Polite Agreement, Playful Teasing, Inquisitive Question, Empathetic Reaction).
+Learner level: {{level}}.
+Learner native language: {{nativeLanguage}}.
+Target language: {{targetLanguage}}.
+{{guidance}}
+
+Output ONLY a JSON array of objects with this schema:
+[
+  {
+    "tone": "Brief tone tag (e.g. Polite, Playful, Curious, Concerned)",
+    "expression": "Spoken sentence in {{targetLanguage}}",
+    "reading": "Pronunciation / Romanization (Romaji, Pinyin, etc.)",
+    "translation": "Meaning in {{nativeLanguage}}"
+  }
+]`;
+
+const defaultImpersonatePrompt = `[Language Learning Task]
+Write the next in-character response for {{user}} replying to {{char}} in {{targetLanguage}}.
+Target Language: {{targetLanguage}}.
+Learner Level: {{level}}.
+Formality: {{formality}}.
+Native Language for explanation: {{nativeLanguage}}.
+{{guidance}}
+
+Return ONLY a JSON object:
+{
+  "expression": "In-character reply for {{user}} in {{targetLanguage}}",
+  "reading": "Phonetic reading / romanization",
+  "translation": "Translation in {{nativeLanguage}}",
+  "grammarNote": "Brief nuance explanation"
+}`;
+
 const defaultSettings = Object.freeze({
     targetLanguage: 'Japanese',
+    targetLanguageCustom: '',
     nativeLanguage: 'English',
+    nativeLanguageCustom: '',
     formality: 'Natural / Contextual',
     level: 'Intermediate',
+    customGuidance: '',
+    formulatePromptTemplate: defaultFormulatePrompt,
+    mcqPromptTemplate: defaultMcqPrompt,
+    impersonatePromptTemplate: defaultImpersonatePrompt,
     showReading: true,
     showGrammar: true,
     showAudio: true,
@@ -25,12 +84,38 @@ function getSettings() {
     return extensionSettings[MODULE_NAME];
 }
 
+function getEffectiveTargetLanguage() {
+    const s = getSettings();
+    if (s.targetLanguage === 'custom') {
+        return s.targetLanguageCustom?.trim() || 'Japanese';
+    }
+    return s.targetLanguage || 'Japanese';
+}
+
+function getEffectiveNativeLanguage() {
+    const s = getSettings();
+    if (s.nativeLanguage === 'custom') {
+        return s.nativeLanguageCustom?.trim() || 'English';
+    }
+    return s.nativeLanguage || 'English';
+}
+
+function resolvePromptTemplate(template, vars) {
+    let result = template || '';
+    for (const [k, v] of Object.entries(vars)) {
+        const regex = new RegExp(`{{${k}}}`, 'g');
+        result = result.replace(regex, v || '');
+    }
+    return result;
+}
+
 const langVoiceCodes = {
     'Japanese': 'ja-JP',
     'Spanish': 'es-ES',
     'French': 'fr-FR',
     'German': 'de-DE',
     'Chinese (Mandarin)': 'zh-CN',
+    'Chinese': 'zh-CN',
     'Korean': 'ko-KR',
     'Russian': 'ru-RU',
     'Italian': 'it-IT',
@@ -59,23 +144,23 @@ async function formulateExpression(userIntent) {
     const { generateRaw, characters, characterId, name1, name2 } = SillyTavern.getContext();
     const settings = getSettings();
     const charName = characters[characterId]?.data?.name || name2 || 'Partner';
+    const userName = name1 || 'User';
+    const targetLang = getEffectiveTargetLanguage();
+    const nativeLang = getEffectiveNativeLanguage();
 
-    const systemPrompt = `You are a conversational language tutor helping a learner speak ${settings.targetLanguage}.
-The user is having a roleplay/chat conversation with "${charName}".
-User's native language: ${settings.nativeLanguage}.
-Target language: ${settings.targetLanguage}.
-Proficiency level: ${settings.level}.
-Formality / Tone: ${settings.formality}.
+    const guidanceText = settings.customGuidance?.trim()
+        ? `Special Language Guidance & Instructions for ${targetLang}:\n${settings.customGuidance.trim()}`
+        : '';
 
-The user will tell you what they want to say. Formulate natural, authentic spoken dialogue in ${settings.targetLanguage} suitable for this context.
-
-Return ONLY a JSON object with this exact structure:
-{
-  "expression": "Natural spoken expression in ${settings.targetLanguage}",
-  "reading": "Phonetic romanization or pronunciation reading (e.g. Romaji/Pinyin/IPA)",
-  "translation": "Literal or direct meaning in ${settings.nativeLanguage}",
-  "grammarNote": "Brief 1-sentence tip on key vocabulary, particles, or nuance"
-}`;
+    const systemPrompt = resolvePromptTemplate(settings.formulatePromptTemplate || defaultFormulatePrompt, {
+        targetLanguage: targetLang,
+        nativeLanguage: nativeLang,
+        char: charName,
+        user: userName,
+        level: settings.level,
+        formality: settings.formality,
+        guidance: guidanceText,
+    });
 
     const prompt = `What I want to say to ${charName}: "${userIntent.trim()}"`;
 
@@ -109,29 +194,28 @@ async function generateMCQChoices() {
     const settings = getSettings();
     const charName = characters[characterId]?.data?.name || name2 || 'Partner';
     const userName = name1 || 'User';
+    const targetLang = getEffectiveTargetLanguage();
+    const nativeLang = getEffectiveNativeLanguage();
 
-    const quietInstruction = `[Language Learning Task]
-Analyze the ongoing conversation above between ${charName} and ${userName}.
-Create 3 or 4 distinct, engaging response options that ${userName} could say next to ${charName} in ${settings.targetLanguage}.
-Each choice must represent a different tone or reaction (e.g. Polite Agreement, Playful Teasing, Inquisitive Question, Empathetic Reaction).
-Learner level: ${settings.level}.
-Learner native language: ${settings.nativeLanguage}.
+    const guidanceText = settings.customGuidance?.trim()
+        ? `Special Language Guidance & Instructions for ${targetLang}:\n${settings.customGuidance.trim()}`
+        : '';
 
-Output ONLY a JSON array of objects with this schema:
-[
-  {
-    "tone": "Brief tone tag (e.g. Polite, Playful, Curious, Concerned)",
-    "expression": "Spoken sentence in ${settings.targetLanguage}",
-    "reading": "Pronunciation / Romanization (Romaji, Pinyin, etc.)",
-    "translation": "Meaning in ${settings.nativeLanguage}"
-  }
-]`;
+    const quietInstruction = resolvePromptTemplate(settings.mcqPromptTemplate || defaultMcqPrompt, {
+        targetLanguage: targetLang,
+        nativeLanguage: nativeLang,
+        char: charName,
+        user: userName,
+        level: settings.level,
+        formality: settings.formality,
+        guidance: guidanceText,
+    });
 
     try {
         const rawResponse = await generateQuietPrompt({
             quietPrompt: quietInstruction,
             skipWIAN: true,
-            responseLength: 450,
+            responseLength: 500,
         });
 
         const match = rawResponse.match(/\[[\s\S]*\]/);
@@ -152,27 +236,28 @@ async function generateImpersonatedReply() {
     const settings = getSettings();
     const charName = characters[characterId]?.data?.name || name2 || 'Partner';
     const userName = name1 || 'User';
+    const targetLang = getEffectiveTargetLanguage();
+    const nativeLang = getEffectiveNativeLanguage();
 
-    const quietInstruction = `[Language Learning Task]
-Write the next in-character response for ${userName} replying to ${charName} in ${settings.targetLanguage}.
-Target Language: ${settings.targetLanguage}.
-Learner Level: ${settings.level}.
-Formality: ${settings.formality}.
-Native Language for explanation: ${settings.nativeLanguage}.
+    const guidanceText = settings.customGuidance?.trim()
+        ? `Special Language Guidance & Instructions for ${targetLang}:\n${settings.customGuidance.trim()}`
+        : '';
 
-Return ONLY a JSON object:
-{
-  "expression": "In-character reply for ${userName} in ${settings.targetLanguage}",
-  "reading": "Phonetic reading / romanization",
-  "translation": "Translation in ${settings.nativeLanguage}",
-  "grammarNote": "Brief nuance explanation"
-}`;
+    const quietInstruction = resolvePromptTemplate(settings.impersonatePromptTemplate || defaultImpersonatePrompt, {
+        targetLanguage: targetLang,
+        nativeLanguage: nativeLang,
+        char: charName,
+        user: userName,
+        level: settings.level,
+        formality: settings.formality,
+        guidance: guidanceText,
+    });
 
     try {
         const rawResponse = await generateQuietPrompt({
             quietPrompt: quietInstruction,
             skipWIAN: true,
-            responseLength: 350,
+            responseLength: 400,
         });
 
         const match = rawResponse.match(/\{[\s\S]*\}/);
@@ -274,6 +359,136 @@ function renderMCQCards(choices) {
     container.slideDown(200);
 }
 
+// Quick Language & Prompt Configuration Modal
+async function openQuickConfigModal() {
+    const { Popup, POPUP_TYPE, POPUP_RESULT, saveSettingsDebounced } = SillyTavern.getContext();
+    const settings = getSettings();
+
+    const modalHtml = `
+    <div style="display: flex; flex-direction: column; gap: 10px; max-height: 80vh; overflow-y: auto; padding: 4px;">
+        <h3 style="margin: 0 0 6px 0; color: var(--SmartThemeQuoteColor, #79b8ff);">
+            <i class="fa-solid fa-language"></i> Configure Target Language & Prompts
+        </h3>
+
+        <div>
+            <label for="modal_lang_target"><b>Target Language:</b></label>
+            <div style="display: flex; gap: 6px; margin-top: 4px;">
+                <select id="modal_lang_target" class="text_pole" style="flex: 1;">
+                    <option value="Japanese" ${settings.targetLanguage === 'Japanese' ? 'selected' : ''}>Japanese (日本語)</option>
+                    <option value="Spanish" ${settings.targetLanguage === 'Spanish' ? 'selected' : ''}>Spanish (Español)</option>
+                    <option value="French" ${settings.targetLanguage === 'French' ? 'selected' : ''}>French (Français)</option>
+                    <option value="German" ${settings.targetLanguage === 'German' ? 'selected' : ''}>German (Deutsch)</option>
+                    <option value="Chinese (Mandarin)" ${settings.targetLanguage === 'Chinese (Mandarin)' ? 'selected' : ''}>Chinese Mandarin (中文)</option>
+                    <option value="Korean" ${settings.targetLanguage === 'Korean' ? 'selected' : ''}>Korean (한국어)</option>
+                    <option value="Russian" ${settings.targetLanguage === 'Russian' ? 'selected' : ''}>Russian (Русский)</option>
+                    <option value="Italian" ${settings.targetLanguage === 'Italian' ? 'selected' : ''}>Italian (Italiano)</option>
+                    <option value="Portuguese" ${settings.targetLanguage === 'Portuguese' ? 'selected' : ''}>Portuguese (Português)</option>
+                    <option value="Vietnamese" ${settings.targetLanguage === 'Vietnamese' ? 'selected' : ''}>Vietnamese (Tiếng Việt)</option>
+                    <option value="Arabic" ${settings.targetLanguage === 'Arabic' ? 'selected' : ''}>Arabic (العربية)</option>
+                    <option value="English" ${settings.targetLanguage === 'English' ? 'selected' : ''}>English</option>
+                    <option value="custom" ${settings.targetLanguage === 'custom' ? 'selected' : ''}>-- Custom Language / Dialect --</option>
+                </select>
+                <input id="modal_lang_target_custom" type="text" class="text_pole" value="${settings.targetLanguageCustom || ''}" placeholder="Type custom language..." style="flex: 1; display: ${settings.targetLanguage === 'custom' ? 'block' : 'none'};" />
+            </div>
+        </div>
+
+        <div>
+            <label for="modal_lang_native"><b>Native / Explanation Language:</b></label>
+            <div style="display: flex; gap: 6px; margin-top: 4px;">
+                <select id="modal_lang_native" class="text_pole" style="flex: 1;">
+                    <option value="English" ${settings.nativeLanguage === 'English' ? 'selected' : ''}>English</option>
+                    <option value="Vietnamese" ${settings.nativeLanguage === 'Vietnamese' ? 'selected' : ''}>Vietnamese (Tiếng Việt)</option>
+                    <option value="Chinese" ${settings.nativeLanguage === 'Chinese' ? 'selected' : ''}>Chinese (中文)</option>
+                    <option value="Spanish" ${settings.nativeLanguage === 'Spanish' ? 'selected' : ''}>Spanish (Español)</option>
+                    <option value="Russian" ${settings.nativeLanguage === 'Russian' ? 'selected' : ''}>Russian (Русский)</option>
+                    <option value="French" ${settings.nativeLanguage === 'French' ? 'selected' : ''}>French (Français)</option>
+                    <option value="German" ${settings.nativeLanguage === 'German' ? 'selected' : ''}>German (Deutsch)</option>
+                    <option value="Japanese" ${settings.nativeLanguage === 'Japanese' ? 'selected' : ''}>Japanese (日本語)</option>
+                    <option value="custom" ${settings.nativeLanguage === 'custom' ? 'selected' : ''}>-- Custom Language --</option>
+                </select>
+                <input id="modal_lang_native_custom" type="text" class="text_pole" value="${settings.nativeLanguageCustom || ''}" placeholder="Type custom language..." style="flex: 1; display: ${settings.nativeLanguage === 'custom' ? 'block' : 'none'};" />
+            </div>
+        </div>
+
+        <div>
+            <label for="modal_lang_guidance"><b>Target Language Specific Prompt & Nuance Instructions:</b></label>
+            <textarea id="modal_lang_guidance" class="text_pole" rows="3" placeholder="e.g. Focus on Kansai dialect; use polite keigo; explain kanji readings; use casual teen slang...">${settings.customGuidance || ''}</textarea>
+        </div>
+
+        <div>
+            <label for="modal_lang_formulate_prompt"><b>Expression Formulation Prompt Template:</b></label>
+            <textarea id="modal_lang_formulate_prompt" class="text_pole" rows="4">${settings.formulatePromptTemplate || defaultFormulatePrompt}</textarea>
+        </div>
+
+        <div>
+            <label for="modal_lang_mcq_prompt"><b>Multiple Choice (MCQ) Prompt Template:</b></label>
+            <textarea id="modal_lang_mcq_prompt" class="text_pole" rows="4">${settings.mcqPromptTemplate || defaultMcqPrompt}</textarea>
+        </div>
+
+        <div>
+            <label for="modal_lang_impersonate_prompt"><b>Impersonate Prompt Template:</b></label>
+            <textarea id="modal_lang_impersonate_prompt" class="text_pole" rows="4">${settings.impersonatePromptTemplate || defaultImpersonatePrompt}</textarea>
+        </div>
+
+        <div>
+            <button id="modal_reset_prompts" class="menu_button" style="width: auto;">
+                <i class="fa-solid fa-rotate-left"></i> Reset Prompts to Default
+            </button>
+        </div>
+    </div>
+    `;
+
+    const popup = new Popup(modalHtml, POPUP_TYPE.CONFIRM, '', {
+        okButton: 'Save Changes',
+        cancelButton: 'Cancel',
+        wide: true,
+        allowVerticalScrolling: true,
+    });
+
+    setTimeout(() => {
+        const targetSel = $('#modal_lang_target');
+        const targetCustom = $('#modal_lang_target_custom');
+        const nativeSel = $('#modal_lang_native');
+        const nativeCustom = $('#modal_lang_native_custom');
+
+        targetSel.on('change', () => {
+            targetCustom.toggle(targetSel.val() === 'custom');
+        });
+        nativeSel.on('change', () => {
+            nativeCustom.toggle(nativeSel.val() === 'custom');
+        });
+
+        $('#modal_reset_prompts').on('click', () => {
+            $('#modal_lang_formulate_prompt').val(defaultFormulatePrompt);
+            $('#modal_lang_mcq_prompt').val(defaultMcqPrompt);
+            $('#modal_lang_impersonate_prompt').val(defaultImpersonatePrompt);
+            toastr.info('Prompts reset to default template.');
+        });
+    }, 100);
+
+    const res = await popup.show();
+    if (res === POPUP_RESULT.AFFIRMATIVE) {
+        settings.targetLanguage = $('#modal_lang_target').val();
+        settings.targetLanguageCustom = $('#modal_lang_target_custom').val();
+        settings.nativeLanguage = $('#modal_lang_native').val();
+        settings.nativeLanguageCustom = $('#modal_lang_native_custom').val();
+        settings.customGuidance = $('#modal_lang_guidance').val();
+        settings.formulatePromptTemplate = $('#modal_lang_formulate_prompt').val();
+        settings.mcqPromptTemplate = $('#modal_lang_mcq_prompt').val();
+        settings.impersonatePromptTemplate = $('#modal_lang_impersonate_prompt').val();
+
+        saveSettingsDebounced();
+        updateLanguageBarLabel();
+        toastr.success('Language & Prompt configurations saved!');
+    }
+}
+
+function updateLanguageBarLabel() {
+    const target = getEffectiveTargetLanguage();
+    const native = getEffectiveNativeLanguage();
+    $('#st_lang_active_label').html(`${native} &rarr; ${target}`);
+}
+
 // Injects the Language Learning Bar directly above the SillyTavern chat send form
 function injectLanguageBar() {
     if ($('#st_lang_learning_container').length) return;
@@ -283,6 +498,8 @@ function injectLanguageBar() {
 
     const { saveSettingsDebounced } = SillyTavern.getContext();
     const settings = getSettings();
+    const targetLang = getEffectiveTargetLanguage();
+    const nativeLang = getEffectiveNativeLanguage();
 
     const barHtml = `
     <div id="st_lang_learning_container" class="${settings.isMinimized ? 'minimized' : ''}">
@@ -290,9 +507,12 @@ function injectLanguageBar() {
             <div class="st-lang-badge" id="st_lang_toggle_bar" title="Click to minimize/expand">
                 <i class="fa-solid fa-graduation-cap"></i>
                 <span>Tutor</span>
-                <span class="lang-tag" id="st_lang_active_label">${settings.nativeLanguage} &rarr; ${settings.targetLanguage}</span>
+                <span class="lang-tag" id="st_lang_active_label" title="Click to change language & prompt settings">${nativeLang} &rarr; ${targetLang}</span>
             </div>
             <div class="st-lang-top-actions">
+                <button id="st_lang_quick_config_btn" class="st-lang-action-btn" title="Configure Language & Custom Prompts">
+                    <i class="fa-solid fa-sliders"></i> <span>Config</span>
+                </button>
                 <button id="st_lang_mcq_btn" class="st-lang-action-btn" title="Suggest multiple-choice reply options">
                     <i class="fa-solid fa-list-check"></i> <span>MCQ Choices</span>
                 </button>
@@ -346,7 +566,8 @@ function injectLanguageBar() {
     const intentInput = $('#st_lang_intent_input');
     const minBtn = $('#st_lang_min_btn');
 
-    const toggleMinimize = () => {
+    const toggleMinimize = (e) => {
+        if ($(e.target).closest('#st_lang_active_label').length) return;
         const isMin = container.toggleClass('minimized').hasClass('minimized');
         settings.isMinimized = isMin;
         minBtn.find('i').attr('class', `fa-solid ${isMin ? 'fa-chevron-down' : 'fa-chevron-up'}`);
@@ -355,6 +576,11 @@ function injectLanguageBar() {
 
     minBtn.on('click', toggleMinimize);
     $('#st_lang_toggle_bar').on('click', toggleMinimize);
+
+    $('#st_lang_active_label, #st_lang_quick_config_btn').on('click', (e) => {
+        e.stopPropagation();
+        openQuickConfigModal();
+    });
 
     const handleFormulate = async () => {
         const text = intentInput.val();
@@ -433,7 +659,7 @@ function injectLanguageBar() {
     $('#st_lang_play_audio').on('click', () => {
         const text = $('#st_lang_target_expr').text();
         if (text) {
-            playSpeech(text, settings.targetLanguage);
+            playSpeech(text, getEffectiveTargetLanguage());
         }
     });
 }
@@ -447,17 +673,36 @@ function injectLanguageBar() {
         const settingsHtml = await renderExtensionTemplateAsync(EXTENSION_DIR, 'settings', settings);
         $('#extensions_settings').append(settingsHtml);
 
-        $('#st_lang_target').val(settings.targetLanguage).on('change', function () {
-            settings.targetLanguage = $(this).val();
-            $('#st_lang_active_label').html(`${settings.nativeLanguage} &rarr; ${settings.targetLanguage}`);
-            saveSettingsDebounced();
-        });
+        const targetSel = $('#st_lang_target');
+        const targetCustom = $('#st_lang_target_custom');
+        const nativeSel = $('#st_lang_native');
+        const nativeCustom = $('#st_lang_native_custom');
 
-        $('#st_lang_native').val(settings.nativeLanguage).on('change', function () {
-            settings.nativeLanguage = $(this).val();
-            $('#st_lang_active_label').html(`${settings.nativeLanguage} &rarr; ${settings.targetLanguage}`);
+        targetSel.val(settings.targetLanguage).on('change', function () {
+            settings.targetLanguage = $(this).val();
+            targetCustom.toggle(settings.targetLanguage === 'custom');
+            updateLanguageBarLabel();
             saveSettingsDebounced();
         });
+        targetCustom.val(settings.targetLanguageCustom || '').on('input', function () {
+            settings.targetLanguageCustom = $(this).val();
+            updateLanguageBarLabel();
+            saveSettingsDebounced();
+        });
+        targetCustom.toggle(settings.targetLanguage === 'custom');
+
+        nativeSel.val(settings.nativeLanguage).on('change', function () {
+            settings.nativeLanguage = $(this).val();
+            nativeCustom.toggle(settings.nativeLanguage === 'custom');
+            updateLanguageBarLabel();
+            saveSettingsDebounced();
+        });
+        nativeCustom.val(settings.nativeLanguageCustom || '').on('input', function () {
+            settings.nativeLanguageCustom = $(this).val();
+            updateLanguageBarLabel();
+            saveSettingsDebounced();
+        });
+        nativeCustom.toggle(settings.nativeLanguage === 'custom');
 
         $('#st_lang_formality').val(settings.formality).on('change', function () {
             settings.formality = $(this).val();
@@ -467,6 +712,37 @@ function injectLanguageBar() {
         $('#st_lang_level').val(settings.level).on('change', function () {
             settings.level = $(this).val();
             saveSettingsDebounced();
+        });
+
+        $('#st_lang_custom_guidance').val(settings.customGuidance || '').on('input', function () {
+            settings.customGuidance = $(this).val();
+            saveSettingsDebounced();
+        });
+
+        $('#st_lang_formulate_prompt').val(settings.formulatePromptTemplate || defaultFormulatePrompt).on('input', function () {
+            settings.formulatePromptTemplate = $(this).val();
+            saveSettingsDebounced();
+        });
+
+        $('#st_lang_mcq_prompt').val(settings.mcqPromptTemplate || defaultMcqPrompt).on('input', function () {
+            settings.mcqPromptTemplate = $(this).val();
+            saveSettingsDebounced();
+        });
+
+        $('#st_lang_impersonate_prompt').val(settings.impersonatePromptTemplate || defaultImpersonatePrompt).on('input', function () {
+            settings.impersonatePromptTemplate = $(this).val();
+            saveSettingsDebounced();
+        });
+
+        $('#st_lang_reset_prompts_btn').on('click', function () {
+            settings.formulatePromptTemplate = defaultFormulatePrompt;
+            settings.mcqPromptTemplate = defaultMcqPrompt;
+            settings.impersonatePromptTemplate = defaultImpersonatePrompt;
+            $('#st_lang_formulate_prompt').val(defaultFormulatePrompt);
+            $('#st_lang_mcq_prompt').val(defaultMcqPrompt);
+            $('#st_lang_impersonate_prompt').val(defaultImpersonatePrompt);
+            saveSettingsDebounced();
+            toastr.info('Prompts reset to default template.');
         });
 
         $('#st_lang_show_reading').prop('checked', settings.showReading).on('change', function () {
@@ -515,6 +791,16 @@ function injectLanguageBar() {
                     const res = await generateImpersonatedReply();
                     if (res) displayStudyResult(res);
                     return 'Expression generated.';
+                },
+            }));
+
+            SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+                name: 'language-config',
+                aliases: ['langconfig'],
+                helpString: 'Opens the Language Learning configuration dialog.',
+                callback: async () => {
+                    openQuickConfigModal();
+                    return 'Language config opened.';
                 },
             }));
         }

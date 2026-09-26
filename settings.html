@@ -9,34 +9,42 @@
 
             <div class="st-lang-row" style="margin-bottom: 8px;">
                 <label for="st_lang_target">Target Language (Language you are learning):</label>
-                <select id="st_lang_target" class="text_pole">
-                    <option value="Japanese">Japanese (日本語)</option>
-                    <option value="Spanish">Spanish (Español)</option>
-                    <option value="French">French (Français)</option>
-                    <option value="German">German (Deutsch)</option>
-                    <option value="Chinese (Mandarin)">Chinese Mandarin (中文)</option>
-                    <option value="Korean">Korean (한국어)</option>
-                    <option value="Russian">Russian (Русский)</option>
-                    <option value="Italian">Italian (Italiano)</option>
-                    <option value="Portuguese">Portuguese (Português)</option>
-                    <option value="Vietnamese">Vietnamese (Tiếng Việt)</option>
-                    <option value="Arabic">Arabic (العربية)</option>
-                    <option value="English">English</option>
-                </select>
+                <div style="display: flex; gap: 6px; margin-top: 2px;">
+                    <select id="st_lang_target" class="text_pole" style="flex: 1;">
+                        <option value="Japanese">Japanese (日本語)</option>
+                        <option value="Spanish">Spanish (Español)</option>
+                        <option value="French">French (Français)</option>
+                        <option value="German">German (Deutsch)</option>
+                        <option value="Chinese (Mandarin)">Chinese Mandarin (中文)</option>
+                        <option value="Korean">Korean (한국어)</option>
+                        <option value="Russian">Russian (Русский)</option>
+                        <option value="Italian">Italian (Italiano)</option>
+                        <option value="Portuguese">Portuguese (Português)</option>
+                        <option value="Vietnamese">Vietnamese (Tiếng Việt)</option>
+                        <option value="Arabic">Arabic (العربية)</option>
+                        <option value="English">English</option>
+                        <option value="custom">-- Custom Language / Dialect --</option>
+                    </select>
+                    <input id="st_lang_target_custom" type="text" class="text_pole" placeholder="Type custom language..." style="flex: 1; display: none;" />
+                </div>
             </div>
 
             <div class="st-lang-row" style="margin-bottom: 8px;">
                 <label for="st_lang_native">Native Language (Your explanation language):</label>
-                <select id="st_lang_native" class="text_pole">
-                    <option value="English">English</option>
-                    <option value="Vietnamese">Vietnamese (Tiếng Việt)</option>
-                    <option value="Chinese">Chinese (中文)</option>
-                    <option value="Spanish">Spanish (Español)</option>
-                    <option value="Russian">Russian (Русский)</option>
-                    <option value="French">French (Français)</option>
-                    <option value="German">German (Deutsch)</option>
-                    <option value="Japanese">Japanese (日本語)</option>
-                </select>
+                <div style="display: flex; gap: 6px; margin-top: 2px;">
+                    <select id="st_lang_native" class="text_pole" style="flex: 1;">
+                        <option value="English">English</option>
+                        <option value="Vietnamese">Vietnamese (Tiếng Việt)</option>
+                        <option value="Chinese">Chinese (中文)</option>
+                        <option value="Spanish">Spanish (Español)</option>
+                        <option value="Russian">Russian (Русский)</option>
+                        <option value="French">French (Français)</option>
+                        <option value="German">German (Deutsch)</option>
+                        <option value="Japanese">Japanese (日本語)</option>
+                        <option value="custom">-- Custom Language --</option>
+                    </select>
+                    <input id="st_lang_native_custom" type="text" class="text_pole" placeholder="Type custom language..." style="flex: 1; display: none;" />
+                </div>
             </div>
 
             <div class="st-lang-row" style="margin-bottom: 8px;">
@@ -57,6 +65,37 @@
                     <option value="Intermediate">Intermediate (conversational fluency)</option>
                     <option value="Advanced">Advanced (idiomatic expressions, nuanced)</option>
                 </select>
+            </div>
+
+            <div class="st-lang-row" style="margin-bottom: 8px;">
+                <label for="st_lang_custom_guidance">Target Language Prompt Instructions & Nuances:</label>
+                <textarea id="st_lang_custom_guidance" class="text_pole" rows="3" placeholder="e.g. Focus on Kansai dialect; explain grammatical particles; use anime speech style; teach slang..."></textarea>
+                <small class="notes">Custom instructions injected into every prompt for this language.</small>
+            </div>
+
+            <div class="inline-drawer" style="margin-top: 10px;">
+                <div class="inline-drawer-toggle inline-drawer-header">
+                    <b><i class="fa-solid fa-code"></i> Advanced Prompt Templates</b>
+                    <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+                </div>
+                <div class="inline-drawer-content">
+                    <p class="notes">Configure the exact system prompts sent to the LLM. Available placeholders: <code>{{char}}</code>, <code>{{user}}</code>, <code>{{targetLanguage}}</code>, <code>{{nativeLanguage}}</code>, <code>{{level}}</code>, <code>{{formality}}</code>, <code>{{guidance}}</code>.</p>
+                    
+                    <label for="st_lang_formulate_prompt"><b>1. Expression Formulation Prompt (Intent &rarr; Target):</b></label>
+                    <textarea id="st_lang_formulate_prompt" class="text_pole" rows="6"></textarea>
+
+                    <label for="st_lang_mcq_prompt" style="margin-top: 8px; display: block;"><b>2. Multiple Choice (MCQ) Prompt:</b></label>
+                    <textarea id="st_lang_mcq_prompt" class="text_pole" rows="6"></textarea>
+
+                    <label for="st_lang_impersonate_prompt" style="margin-top: 8px; display: block;"><b>3. Impersonate (Write for Me) Prompt:</b></label>
+                    <textarea id="st_lang_impersonate_prompt" class="text_pole" rows="6"></textarea>
+
+                    <div style="margin-top: 8px;">
+                        <button id="st_lang_reset_prompts_btn" class="menu_button" style="width: auto;">
+                            <i class="fa-solid fa-rotate-left"></i> Reset Prompts to Default
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div class="st-lang-row" style="margin-top: 10px;">
