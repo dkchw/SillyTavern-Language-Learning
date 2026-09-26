@@ -468,14 +468,14 @@ async function openQuickConfigModal() {
 
     const res = await popup.show();
     if (res === POPUP_RESULT.AFFIRMATIVE) {
-        settings.targetLanguage = $('#modal_lang_target').val();
-        settings.targetLanguageCustom = $('#modal_lang_target_custom').val();
-        settings.nativeLanguage = $('#modal_lang_native').val();
-        settings.nativeLanguageCustom = $('#modal_lang_native_custom').val();
-        settings.customGuidance = $('#modal_lang_guidance').val();
-        settings.formulatePromptTemplate = $('#modal_lang_formulate_prompt').val();
-        settings.mcqPromptTemplate = $('#modal_lang_mcq_prompt').val();
-        settings.impersonatePromptTemplate = $('#modal_lang_impersonate_prompt').val();
+        settings.targetLanguage = popup.dlg.querySelector('#modal_lang_target')?.value || 'Japanese';
+        settings.targetLanguageCustom = popup.dlg.querySelector('#modal_lang_target_custom')?.value || '';
+        settings.nativeLanguage = popup.dlg.querySelector('#modal_lang_native')?.value || 'English';
+        settings.nativeLanguageCustom = popup.dlg.querySelector('#modal_lang_native_custom')?.value || '';
+        settings.customGuidance = popup.dlg.querySelector('#modal_lang_guidance')?.value || '';
+        settings.formulatePromptTemplate = popup.dlg.querySelector('#modal_lang_formulate_prompt')?.value || defaultFormulatePrompt;
+        settings.mcqPromptTemplate = popup.dlg.querySelector('#modal_lang_mcq_prompt')?.value || defaultMcqPrompt;
+        settings.impersonatePromptTemplate = popup.dlg.querySelector('#modal_lang_impersonate_prompt')?.value || defaultImpersonatePrompt;
 
         saveSettingsDebounced();
         updateLanguageBarLabel();
