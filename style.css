@@ -1,0 +1,196 @@
+/* SillyTavern-Language-Learning Styles */
+
+#st_lang_learning_container {
+    width: 100%;
+    margin: 4px 0 6px 0;
+    padding: 8px 12px;
+    background: var(--SmartThemeBlurTintColor, rgba(20, 24, 32, 0.92));
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+    z-index: 10;
+}
+
+#st_lang_learning_container.minimized .st-lang-body {
+    display: none !important;
+}
+
+.st-lang-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.st-lang-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--SmartThemeQuoteColor, #79b8ff);
+    cursor: pointer;
+    user-select: none;
+}
+
+.st-lang-badge .lang-tag {
+    background: rgba(121, 184, 255, 0.15);
+    color: var(--SmartThemeQuoteColor, #79b8ff);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    border: 1px solid rgba(121, 184, 255, 0.25);
+}
+
+.st-lang-top-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.st-lang-action-btn {
+    background: var(--SmartThemeBlurTintColor, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.15));
+    color: var(--SmartThemeBodyColor, #e0e0e0);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.85em;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+}
+
+.st-lang-action-btn:hover {
+    background: var(--SmartThemeHoverColor, rgba(255, 255, 255, 0.18));
+    border-color: var(--SmartThemeQuoteColor, #79b8ff);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.st-lang-input-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.st-lang-intent-input {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.15));
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: #fff;
+    font-size: 0.9em;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.st-lang-intent-input:focus {
+    border-color: var(--SmartThemeQuoteColor, #79b8ff);
+}
+
+.st-lang-result-box {
+    background: rgba(0, 0, 0, 0.35);
+    border-left: 3px solid var(--SmartThemeQuoteColor, #79b8ff);
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.st-lang-target-expression {
+    font-size: 1.15em;
+    font-weight: 600;
+    color: #ffffff;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.st-lang-reading {
+    font-size: 0.9em;
+    color: #ffb86c;
+    font-style: italic;
+}
+
+.st-lang-translation {
+    font-size: 0.9em;
+    color: #bdc3c7;
+}
+
+.st-lang-grammar-note {
+    font-size: 0.82em;
+    color: #8be9fd;
+    margin-top: 4px;
+    background: rgba(139, 233, 253, 0.08);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px dashed rgba(139, 233, 253, 0.3);
+}
+
+.st-lang-result-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.st-lang-mcq-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.st-lang-mcq-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: all 0.15s ease;
+}
+
+.st-lang-mcq-card:hover {
+    background: rgba(121, 184, 255, 0.12);
+    border-color: var(--SmartThemeQuoteColor, #79b8ff);
+    transform: translateX(2px);
+}
+
+.st-lang-mcq-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.82em;
+}
+
+.st-lang-mcq-tone {
+    background: rgba(80, 250, 123, 0.2);
+    color: #50fa7b;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: bold;
+    font-size: 0.85em;
+}
+
+.st-lang-mcq-text {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.st-lang-mcq-sub {
+    font-size: 0.85em;
+    color: #a0aec0;
+}

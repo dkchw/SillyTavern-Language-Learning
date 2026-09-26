@@ -1,0 +1,11 @@
+{
+    "display_name": "Language Learning Tutor",
+    "loading_order": 95,
+    "js": "index.js",
+    "css": "style.css",
+    "author": "dkchw",
+    "version": "1.0.0",
+    "homePage": "https://github.com/dkchw/SillyTavern-Language-Learning",
+    "auto_update": true,
+    "minimum_client_version": "1.12.0"
+}
