@@ -1,20 +1,3 @@
-import {
-    eventSource,
-    event_types,
-    generateQuietPrompt,
-    generateRaw,
-    renderExtensionTemplateAsync,
-    extension_settings,
-    saveSettingsDebounced,
-    chat,
-    name1,
-    name2,
-    this_chid,
-    characters,
-    SlashCommandParser,
-    SlashCommand,
-} from '../../../script.js';
-
 const MODULE_NAME = 'language_learning_tutor';
 const EXTENSION_DIR = 'third-party/SillyTavern-Language-Learning';
 
@@ -30,15 +13,16 @@ const defaultSettings = Object.freeze({
 });
 
 function getSettings() {
-    if (!extension_settings[MODULE_NAME]) {
-        extension_settings[MODULE_NAME] = structuredClone(defaultSettings);
+    const { extensionSettings } = SillyTavern.getContext();
+    if (!extensionSettings[MODULE_NAME]) {
+        extensionSettings[MODULE_NAME] = structuredClone(defaultSettings);
     }
     for (const key of Object.keys(defaultSettings)) {
-        if (!Object.hasOwn(extension_settings[MODULE_NAME], key)) {
-            extension_settings[MODULE_NAME][key] = defaultSettings[key];
+        if (!Object.hasOwn(extensionSettings[MODULE_NAME], key)) {
+            extensionSettings[MODULE_NAME][key] = defaultSettings[key];
         }
     }
-    return extension_settings[MODULE_NAME];
+    return extensionSettings[MODULE_NAME];
 }
 
 const langVoiceCodes = {
@@ -72,9 +56,9 @@ function playSpeech(text, lang) {
 async function formulateExpression(userIntent) {
     if (!userIntent || !userIntent.trim()) return null;
 
+    const { generateRaw, characters, characterId, name1, name2 } = SillyTavern.getContext();
     const settings = getSettings();
-    const charName = characters[this_chid]?.data?.name || name2 || 'Partner';
-    const userName = name1 || 'User';
+    const charName = characters[characterId]?.data?.name || name2 || 'Partner';
 
     const systemPrompt = `You are a conversational language tutor helping a learner speak ${settings.targetLanguage}.
 The user is having a roleplay/chat conversation with "${charName}".
@@ -102,7 +86,6 @@ Return ONLY a JSON object with this exact structure:
             trimNames: false,
         });
 
-        // Extract JSON block if surrounded by markdown
         const match = rawJson.match(/\{[\s\S]*\}/);
         if (match) {
             return JSON.parse(match[0]);
@@ -122,8 +105,9 @@ Return ONLY a JSON object with this exact structure:
 
 // 2. Generate Multiple Choice (MCQ) reply options based on active chat
 async function generateMCQChoices() {
+    const { generateQuietPrompt, characters, characterId, name1, name2 } = SillyTavern.getContext();
     const settings = getSettings();
-    const charName = characters[this_chid]?.data?.name || name2 || 'Partner';
+    const charName = characters[characterId]?.data?.name || name2 || 'Partner';
     const userName = name1 || 'User';
 
     const quietInstruction = `[Language Learning Task]
@@ -164,8 +148,9 @@ Output ONLY a JSON array of objects with this schema:
 
 // 3. Impersonate: write in-character response in target language
 async function generateImpersonatedReply() {
+    const { generateQuietPrompt, characters, characterId, name1, name2 } = SillyTavern.getContext();
     const settings = getSettings();
-    const charName = characters[this_chid]?.data?.name || name2 || 'Partner';
+    const charName = characters[characterId]?.data?.name || name2 || 'Partner';
     const userName = name1 || 'User';
 
     const quietInstruction = `[Language Learning Task]
@@ -267,10 +252,8 @@ function renderMCQCards(choices) {
             </div>
         `);
 
-        // Clicking card previews it in study box
         card.on('click', function (e) {
             if ($(e.target).closest('.st-lang-mcq-send-btn').length) {
-                // Immediate send
                 $('#send_textarea').val(choice.expression).trigger('input');
                 $('#send_but').trigger('click');
                 container.slideUp(150);
@@ -298,6 +281,7 @@ function injectLanguageBar() {
     const sendForm = document.querySelector('#send_form');
     if (!sendForm || !sendForm.parentElement) return;
 
+    const { saveSettingsDebounced } = SillyTavern.getContext();
     const settings = getSettings();
 
     const barHtml = `
@@ -358,12 +342,10 @@ function injectLanguageBar() {
 
     $(barHtml).insertBefore(sendForm);
 
-    // Event bindings
     const container = $('#st_lang_learning_container');
     const intentInput = $('#st_lang_intent_input');
     const minBtn = $('#st_lang_min_btn');
 
-    // Toggle minimize
     const toggleMinimize = () => {
         const isMin = container.toggleClass('minimized').hasClass('minimized');
         settings.isMinimized = isMin;
@@ -374,7 +356,6 @@ function injectLanguageBar() {
     minBtn.on('click', toggleMinimize);
     $('#st_lang_toggle_bar').on('click', toggleMinimize);
 
-    // Formulate Intent
     const handleFormulate = async () => {
         const text = intentInput.val();
         if (!text || !text.trim()) return;
@@ -401,7 +382,6 @@ function injectLanguageBar() {
         }
     });
 
-    // MCQ Choices
     $('#st_lang_mcq_btn').on('click', async () => {
         const btn = $('#st_lang_mcq_btn');
         btn.prop('disabled', true).find('i').attr('class', 'fa-solid fa-spinner fa-spin');
@@ -413,7 +393,6 @@ function injectLanguageBar() {
         }
     });
 
-    // Impersonate / Write for me
     $('#st_lang_impersonate_btn').on('click', async () => {
         const btn = $('#st_lang_impersonate_btn');
         btn.prop('disabled', true).find('i').attr('class', 'fa-solid fa-spinner fa-spin');
@@ -428,7 +407,6 @@ function injectLanguageBar() {
         }
     });
 
-    // Copy to Clipboard
     $('#st_lang_copy_btn').on('click', () => {
         const text = $('#st_lang_target_expr').text();
         if (text) {
@@ -437,7 +415,6 @@ function injectLanguageBar() {
         }
     });
 
-    // Fill chatbox
     $('#st_lang_fill_chat_btn').on('click', () => {
         const text = $('#st_lang_target_expr').text();
         if (text) {
@@ -445,7 +422,6 @@ function injectLanguageBar() {
         }
     });
 
-    // Send now
     $('#st_lang_send_now_btn').on('click', () => {
         const text = $('#st_lang_target_expr').text();
         if (text) {
@@ -454,7 +430,6 @@ function injectLanguageBar() {
         }
     });
 
-    // Audio Playback
     $('#st_lang_play_audio').on('click', () => {
         const text = $('#st_lang_target_expr').text();
         if (text) {
@@ -463,7 +438,9 @@ function injectLanguageBar() {
     });
 }
 
-jQuery(async () => {
+(async function init() {
+    const { renderExtensionTemplateAsync, saveSettingsDebounced, eventSource, eventTypes, SlashCommandParser, SlashCommand } = SillyTavern.getContext();
+
     // 1. Render Extension Settings Drawer
     try {
         const settings = getSettings();
@@ -510,35 +487,38 @@ jQuery(async () => {
         console.error('[Language Learning] Failed to render settings template:', e);
     }
 
-    // 2. Inject Language Bar when app is ready
-    eventSource.on(event_types.APP_READY, injectLanguageBar);
-    // In case APP_READY already fired
+    // 2. Inject Language Bar when app is ready or immediately if DOM is ready
+    if (eventSource && eventTypes) {
+        eventSource.on(eventTypes.APP_READY, injectLanguageBar);
+    }
     injectLanguageBar();
 
     // 3. Register Slash Commands
     try {
-        SlashCommandParser.addCommandObject(SlashCommand.fromProps({
-            name: 'language-mcq',
-            aliases: ['langmcq'],
-            helpString: 'Generates multiple choice reply options in target language.',
-            callback: async () => {
-                const choices = await generateMCQChoices();
-                renderMCQCards(choices);
-                return 'MCQ options generated.';
-            },
-        }));
+        if (SlashCommandParser && SlashCommand) {
+            SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+                name: 'language-mcq',
+                aliases: ['langmcq'],
+                helpString: 'Generates multiple choice reply options in target language.',
+                callback: async () => {
+                    const choices = await generateMCQChoices();
+                    renderMCQCards(choices);
+                    return 'MCQ options generated.';
+                },
+            }));
 
-        SlashCommandParser.addCommandObject(SlashCommand.fromProps({
-            name: 'language-impersonate',
-            aliases: ['langwrite'],
-            helpString: 'Writes an in-character reply in target language.',
-            callback: async () => {
-                const res = await generateImpersonatedReply();
-                if (res) displayStudyResult(res);
-                return 'Expression generated.';
-            },
-        }));
+            SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+                name: 'language-impersonate',
+                aliases: ['langwrite'],
+                helpString: 'Writes an in-character reply in target language.',
+                callback: async () => {
+                    const res = await generateImpersonatedReply();
+                    if (res) displayStudyResult(res);
+                    return 'Expression generated.';
+                },
+            }));
+        }
     } catch (e) {
         console.debug('[Language Learning] Slash command registration error:', e);
     }
-});
+})();
