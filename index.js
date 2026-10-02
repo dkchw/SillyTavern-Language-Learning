@@ -76,6 +76,7 @@ Return ONLY a JSON object:
 const defaultSettings = Object.freeze({
     targetLanguage: 'Japanese',
     targetLanguageCustom: '',
+    customModel: '',
     nativeLanguage: 'English',
     nativeLanguageCustom: '',
     formality: 'Natural / Contextual',
@@ -165,6 +166,45 @@ function playSpeech(text, lang) {
 }
 
 // 1. Formulate user's intended thought OR correct & naturalize draft sentence
+function getSettingPropertyForSource(source) {
+    const map = {
+        'openai': 'openai_model', 'claude': 'claude_model', 'openrouter': 'openrouter_model',
+        'ai21': 'ai21_model', 'makersuite': 'google_model', 'vertexai': 'vertexai_model',
+        'mistralai': 'mistralai_model', 'custom': 'custom_model', 'cohere': 'cohere_model',
+        'perplexity': 'perplexity_model', 'groq': 'groq_model', 'electronhub': 'electronhub_model',
+        'chutes': 'chutes_model', 'nanogpt': 'nanogpt_model', 'deepseek': 'deepseek_model',
+        'aimlapi': 'aimlapi_model', 'xai': 'xai_model', 'pollinations': 'pollinations_model',
+        'moonshot': 'moonshot_model', 'fireworks': 'fireworks_model', 'cometapi': 'cometapi_model',
+        'azure_openai': 'azure_openai_model', 'zai': 'zai_model', 'siliconflow': 'siliconflow_model',
+        'workers_ai': 'workers_ai_model', 'minimax': 'minimax_model'
+    };
+    return map[source];
+}
+
+async function withCustomModel(operation) {
+    const context = SillyTavern.getContext();
+    const settings = getSettings();
+    let originalModel = null;
+    let modelProp = null;
+    
+    if (settings.customModel && settings.customModel.trim() && context.chatCompletionSettings) {
+        const source = context.chatCompletionSettings.chat_completion_source;
+        modelProp = getSettingPropertyForSource(source);
+        if (modelProp) {
+            originalModel = context.chatCompletionSettings[modelProp];
+            context.chatCompletionSettings[modelProp] = settings.customModel.trim();
+        }
+    }
+    
+    try {
+        return await operation();
+    } finally {
+        if (modelProp && originalModel !== null) {
+            context.chatCompletionSettings[modelProp] = originalModel;
+        }
+    }
+}
+
 async function formulateExpression(userInput) {
     if (!userInput || !userInput.trim()) return null;
 
@@ -192,11 +232,11 @@ async function formulateExpression(userInput) {
     const prompt = `Input sentence/thought to say to ${charName}: "${userInput.trim()}"`;
 
     try {
-        const rawJson = await generateRaw({
+        const rawJson = await withCustomModel(() => generateRaw({
             prompt,
             systemPrompt,
             trimNames: false,
-        });
+        }));
 
         const match = rawJson.match(/\{[\s\S]*\}/);
         if (match) {
@@ -241,11 +281,11 @@ async function generateMCQChoices() {
     });
 
     try {
-        const rawResponse = await generateQuietPrompt({
+        const rawResponse = await withCustomModel(() => generateQuietPrompt({
             quietPrompt: quietInstruction,
             skipWIAN: true,
             responseLength: 500,
-        });
+        }));
 
         const match = rawResponse.match(/\[[\s\S]*\]/);
         if (match) {
@@ -283,11 +323,11 @@ async function generateImpersonatedReply() {
     });
 
     try {
-        const rawResponse = await generateQuietPrompt({
+        const rawResponse = await withCustomModel(() => generateQuietPrompt({
             quietPrompt: quietInstruction,
             skipWIAN: true,
             responseLength: 400,
-        });
+        }));
 
         const match = rawResponse.match(/\{[\s\S]*\}/);
         if (match) {
@@ -439,6 +479,11 @@ async function openQuickConfigModal() {
         </div>
 
         <div>
+            <label for="modal_lang_custom_model"><b>Custom API Model (Override):</b></label>
+            <input id="modal_lang_custom_model" type="text" class="text_pole" value="${settings.customModel || ''}" placeholder="e.g. gpt-4, claude-3-5-sonnet (Leave blank for active model)" style="margin-top: 4px;" />
+        </div>
+
+        <div>
             <label for="modal_lang_native"><b>Native / Explanation Language:</b></label>
             <div style="display: flex; gap: 6px; margin-top: 4px;">
                 <select id="modal_lang_native" class="text_pole" style="flex: 1;">
@@ -535,6 +580,7 @@ async function openQuickConfigModal() {
     if (res === POPUP_RESULT.AFFIRMATIVE) {
         settings.targetLanguage = popup.dlg.querySelector('#modal_lang_target')?.value || 'Japanese';
         settings.targetLanguageCustom = popup.dlg.querySelector('#modal_lang_target_custom')?.value || '';
+        settings.customModel = popup.dlg.querySelector('#modal_lang_custom_model')?.value || '';
         settings.nativeLanguage = popup.dlg.querySelector('#modal_lang_native')?.value || 'English';
         settings.nativeLanguageCustom = popup.dlg.querySelector('#modal_lang_native_custom')?.value || '';
         settings.customGuidance = popup.dlg.querySelector('#modal_lang_guidance')?.value || '';
@@ -602,6 +648,9 @@ function injectLanguageBar() {
                 </button>
                 <button id="st_lang_check_chat_btn" class="st-lang-action-btn" title="Check & naturalize draft sentence in chatbox">
                     <i class="fa-solid fa-spell-check"></i> <span>Check Chatbox</span>
+                </button>
+                <button id="st_lang_review_past_btn" class="st-lang-action-btn" title="Review and correct past messages you sent in this chat">
+                    <i class="fa-solid fa-clock-rotate-left"></i> <span>Review Past Messages</span>
                 </button>
             </div>
 
@@ -708,6 +757,62 @@ function injectLanguageBar() {
         intentInput.val(chatVal);
         handleFormulate();
     });
+
+    $('#st_lang_review_past_btn').on('click', async () => {
+        const { Popup, POPUP_TYPE, chat } = SillyTavern.getContext();
+        const userMessages = chat.filter(m => m.is_user && m.mes?.trim());
+        
+        if (userMessages.length === 0) {
+            toastr.info('No user messages found in this chat to review.');
+            return;
+        }
+        
+        const recentMessages = userMessages.slice(-20).reverse();
+        const listHtml = recentMessages.map((m, idx) => `
+            <div class="st-lang-past-msg" data-idx="${idx}" style="padding: 8px; border: 1px solid var(--SmartThemeBorderColor); border-radius: 5px; margin-bottom: 6px; cursor: pointer; background: var(--SmartThemeBlurTintColor);">
+                <div style="font-size: 0.85em; color: var(--SmartThemeQuoteColor); margin-bottom: 4px;">Sent at: ${new Date(m.send_date).toLocaleString()}</div>
+                <div>${m.mes}</div>
+            </div>
+        `).join('');
+
+        const modalHtml = `
+            <div style="max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+                <h4 style="margin-top:0;">Select a past message to correct & naturalize:</h4>
+                <p style="font-size: 0.9em; opacity: 0.8; margin-bottom: 10px;">Showing up to 20 most recent messages you sent.</p>
+                <div id="st_lang_past_msgs_container">
+                    ${listHtml}
+                </div>
+            </div>
+        `;
+
+        const popup = new Popup(modalHtml, POPUP_TYPE.TEXT, '', {
+            okButton: 'Close',
+            wide: true
+        });
+
+        setTimeout(() => {
+            const container = popup.dlg.querySelector('#st_lang_past_msgs_container');
+            if (container) {
+                const msgs = container.querySelectorAll('.st-lang-past-msg');
+                msgs.forEach(el => {
+                    el.addEventListener('click', () => {
+                        const idx = el.getAttribute('data-idx');
+                        const msg = recentMessages[idx];
+                        if (msg) {
+                            $('#st_lang_intent_input').val(msg.mes);
+                            popup.complete();
+                            setTimeout(handleFormulate, 100);
+                        }
+                    });
+                    
+                    el.addEventListener('mouseenter', () => el.style.background = 'var(--SmartThemeQuoteColor)');
+                    el.addEventListener('mouseleave', () => el.style.background = 'var(--SmartThemeBlurTintColor)');
+                });
+            }
+        }, 100);
+
+        await popup.show();
+    });
     intentInput.on('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -810,6 +915,11 @@ function injectLanguageBar() {
             saveSettingsDebounced();
         });
         nativeCustom.toggle(settings.nativeLanguage === 'custom');
+
+        $('#st_lang_custom_model').val(settings.customModel || '').on('input', function () {
+            settings.customModel = $(this).val();
+            saveSettingsDebounced();
+        });
 
         $('#st_lang_formality').val(settings.formality).on('change', function () {
             settings.formality = $(this).val();
